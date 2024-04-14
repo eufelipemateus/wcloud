@@ -22,6 +22,8 @@ nanorand = "0.7.0"
 serde = { version = "1.0.164", optional = true }
 serde_derive = { version = "1.0.164", optional = true }
 serde_json = { version = "1.0.99", optional = true }
+svg = "0.12.1"
+text-svg = "0.1.2"
 
 [dev-dependencies]
 criterion = { version = "0.4.0", features = ["html_reports"] }
@@ -32,3 +34,10 @@ harness = false
 
 [features]
 visualize = ["dep:serde", "dep:serde_derive", "dep:serde_json"]
+
+
+[dependencies.font-kit]
+version = "0.11.0"
+
+[dependencies.rusttype]
+version = "0.9.3"

@@ -1,8 +1,10 @@
-use std::fs;
+use std::fs::{self, File};
+use std::io::Read;
 use std::path::{PathBuf};
 use image::{GrayImage, Luma, RgbaImage, Rgba};
 use ab_glyph::{PxScale, Point, point, FontVec, Font, Glyph};
 use palette::{Pixel, Srgb, Hsl, IntoColor};
+use text_svg::Text;
 use std::process::exit;
 use woff2::decode::{convert_woff2_to_ttf, is_woff2};
 
@@ -14,6 +16,16 @@ pub use tokenizer::{Tokenizer, DEFAULT_EXCLUDE_WORDS_TEXT};
 
 use nanorand::{Rng, WyRand};
 use crate::sat::{Rect, Region};
+
+use svg::Document;
+use svg::node::element::Path;
+use svg::node::element::path::Data;
+use font_kit::{
+    family_name::FamilyName, handle::Handle, properties::Properties, source::SystemSource,
+};
+
+use rusttype::{Font as OtherFont, Point as OtherPoint};
+
 
 #[cfg(feature = "visualize")]
 mod visualize;
@@ -146,25 +158,49 @@ impl WordCloud {
             exit(1);
         }
 
-        let mut final_image_buffer = RgbaImage::from_pixel((width as f32 * scale) as u32, (height as f32 * scale) as u32, background_color);
+        let final_image_buffer = RgbaImage::from_pixel((width as f32 * scale) as u32, (height as f32 * scale) as u32, background_color);
+
+        let document = Document::new()
+            .set("width", width)
+            .set("height", height);
+
+        let handle = SystemSource::new()
+        .select_best_match(&[FamilyName::Serif], &Properties::new())
+        .unwrap();
+
+        let font = match handle {
+            Handle::Path { path, font_index } => {
+                let mut file = File::open(path).unwrap();
+                let mut buf = Vec::new();
+                file.read_to_end(&mut buf).unwrap();
+                OtherFont::try_from_vec_and_index(buf, font_index).unwrap()
+            }
+            Handle::Memory { bytes, font_index } => {
+                OtherFont::try_from_vec_and_index(bytes.to_vec(), font_index).unwrap()
+            }
+        };
+
 
         for mut word in word_positions.into_iter() {
-            let col = color_func(&word, rng);
-
-            if scale != 1.0 {
-                word.font_size.x *= scale;
-                word.font_size.y *= scale;
+            if scale != 1.0 {  
 
                 word.position.x *= scale;
                 word.position.y *= scale;
+  
+                
+                let text =    Text::builder()
+                .size(scale)
+                .start(OtherPoint { x: word.position.x , y:  word.position.y  })
+                .build(&font, word.text);
 
-                word.glyphs = text::text_to_glyphs(word.text, word.font, word.font_size);
+               document.clone().add(text.path);
             }
 
-            text::draw_glyphs_to_rgba_buffer(&mut final_image_buffer, word.glyphs, word.font, word.position, word.rotated, col);
         }
 
+        svg::save("image.svg", &document).unwrap();
         final_image_buffer
+        
     }
 
     fn check_font_size(font_size: &mut f32, font_step: f32, min_font_size: f32) -> bool {
